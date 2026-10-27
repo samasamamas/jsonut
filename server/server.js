@@ -5,6 +5,8 @@ const { initializeDatabase } = require('./src/config/database');
 const testRoutes =  require('./src/routes/test')
 const productRoutes = require('./src/routes/productRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+const transactionRoutes = require('./src/routes/transactionRoutes');
+const transactiondetailRoutes = require('./src/routes/transactiondetailRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,6 +34,8 @@ app.get('/', (req, res) => {
 app.use('/api/test', testRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/products', productRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/transaction-details', transactiondetailRoutes);
 
 /* 404 */
 app.use((req, res) => {
