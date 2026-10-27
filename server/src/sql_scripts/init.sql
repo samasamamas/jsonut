@@ -48,3 +48,13 @@ CREATE TABLE IF NOT EXISTS transaction_details (
     FOREIGN KEY (transaction_id) REFERENCES transactions(id),
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
+
+INSERT INTO users (full_name, email, password, role)
+VALUES (
+  'Admin JSONut',
+  'admin@jsonut.com',
+  '$2b$10$766aE0A.zTe9MqGqv/SgJ.e2zBAvPa/.se5Po2LwPq2JIa6ti4ifq',
+  'admin'
+)
+ON CONFLICT(email) DO UPDATE SET
+  role = 'admin';

@@ -4,6 +4,7 @@ const cors = require('cors');
 const { initializeDatabase } = require('./src/config/database');
 const testRoutes =  require('./src/routes/test')
 const productRoutes = require('./src/routes/productRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,7 @@ app.get('/', (req, res) => {
 
 /* Routes */
 app.use('/api/test', testRoutes)
+app.use('/api/users', userRoutes)
 app.use('/api/products', productRoutes);
 
 /* 404 */
