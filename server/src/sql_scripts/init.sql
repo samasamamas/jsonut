@@ -1,8 +1,10 @@
+
 -- Tabel Log (Opsional, untuk testing backend)
 CREATE TABLE IF NOT EXISTS test_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
 INSERT INTO test_logs DEFAULT VALUES;
 
 -- 1. TABEL PRODUK (Tanpa Kategori)
@@ -11,6 +13,7 @@ CREATE TABLE IF NOT EXISTS products (
     name TEXT NOT NULL,
     price REAL NOT NULL,
     stock INTEGER DEFAULT 0,
+    image TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -21,18 +24,18 @@ CREATE TABLE IF NOT EXISTS users (
     full_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'pelanggan', 
+    role TEXT NOT NULL DEFAULT 'pelanggan',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 3. TABEL TRANSAKSI (Header dari sebuah pesanan/struk)
 CREATE TABLE IF NOT EXISTS transactions (
-    id TEXT PRIMARY KEY, 
-    user_id INTEGER,     
+    id TEXT PRIMARY KEY,
+    user_id INTEGER,
     total_amount REAL NOT NULL,
-    payment_method TEXT, 
-    status TEXT DEFAULT 'pending', 
-    order_type TEXT DEFAULT 'offline', 
+    payment_method TEXT,
+    status TEXT DEFAULT 'pending',
+    order_type TEXT DEFAULT 'offline',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -43,18 +46,19 @@ CREATE TABLE IF NOT EXISTS transaction_details (
     transaction_id TEXT NOT NULL,
     product_id INTEGER NOT NULL,
     quantity INTEGER NOT NULL,
-    price_at_time REAL NOT NULL, 
+    price_at_time REAL NOT NULL,
     subtotal REAL NOT NULL,
     FOREIGN KEY (transaction_id) REFERENCES transactions(id),
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
+-- ADMIN DEFAULT
 INSERT INTO users (full_name, email, password, role)
 VALUES (
-  'Admin JSONut',
-  'admin@jsonut.com',
-  '$2b$10$766aE0A.zTe9MqGqv/SgJ.e2zBAvPa/.se5Po2LwPq2JIa6ti4ifq',
-  'admin'
+    'Admin JSONut',
+    'admin@jsonut.com',
+    '$2b$10$766aE0A.zTe9MqGqv/SgJ.e2zBAvPa/.se5Po2LwPq2JIa6ti4ifq',
+    'admin'
 )
 ON CONFLICT(email) DO UPDATE SET
-  role = 'admin';
+    role = 'admin';

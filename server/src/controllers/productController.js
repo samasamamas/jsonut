@@ -1,7 +1,10 @@
+
 const productModel = require('../models/productModel');
+const fs = require('fs');
+const path = require('path');
 
 /* =========================================================
- *  Helper: standard response biar konsisten
+ * Helper: standard response
  * ========================================================= */
 const success = (res, code, message, data = null) =>
   res.status(code).json({ success: true, message, data });
@@ -10,95 +13,253 @@ const fail = (res, code, message, error = null) =>
   res.status(code).json({ success: false, message, error });
 
 /* =========================================================
- *  GET /api/products — semua produk
+ * Helper: hapus file foto
+ * ========================================================= */
+const removeImage = (image) => {
+  if (!image) return;
+
+  const filename = path.basename(image);
+  const imagePath = path.join(
+    __dirname,
+    '../../uploads/products',
+    filename
+  );
+
+  if (fs.existsSync(imagePath)) {
+    fs.unlinkSync(imagePath);
+  }
+};
+
+/* =========================================================
+ * Helper: mendapatkan path foto
+ * ========================================================= */
+const getImagePath = (req) => {
+  return req.file
+    ? `/uploads/products/${req.file.filename}`
+    : undefined;
+};
+
+/* =========================================================
+ * GET /api/products
  * ========================================================= */
 const getAllProducts = async (req, res) => {
   try {
     const products = await productModel.findAllProducts();
-    success(res, 200, 'Berhasil mengambil semua produk', products);
+
+    return success(
+      res,
+      200,
+      'Berhasil mengambil semua produk',
+      products
+    );
   } catch (error) {
     console.error('[getAllProducts]', error);
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error', error.message);
   }
 };
 
 /* =========================================================
- *  GET /api/products/:id — satu produk
+ * GET /api/products/:id
  * ========================================================= */
 const getProductById = async (req, res) => {
   try {
     const product = await productModel.findProductById(req.params.id);
-    if (!product) return fail(res, 404, 'Produk tidak ditemukan');
-    success(res, 200, 'Berhasil mengambil produk', product);
+
+    if (!product) {
+      return fail(res, 404, 'Produk tidak ditemukan');
+    }
+
+    return success(res, 200, 'Berhasil mengambil produk', product);
   } catch (error) {
     console.error('[getProductById]', error);
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error', error.message);
   }
 };
 
 /* =========================================================
- *  POST /api/products — buat produk baru
+ * POST /api/products
  * ========================================================= */
 const createProduct = async (req, res) => {
   try {
     const { name, price } = req.body;
 
-    // Validasi wajib
     if (!name || name.trim() === '') {
       return fail(res, 400, 'Validasi gagal', 'name wajib diisi');
     }
-    if (price === undefined || price === null || isNaN(price) || price < 0) {
-      return fail(res, 400, 'Validasi gagal', 'price wajib angka >= 0');
+
+    const numericPrice = Number(price);
+
+    if (
+      price === undefined ||
+      price === null ||
+      price === '' ||
+      !Number.isFinite(numericPrice) ||
+      numericPrice < 0
+    ) {
+      return fail(
+        res,
+        400,
+        'Validasi gagal',
+        'price wajib angka >= 0'
+      );
     }
 
-    const created = await productModel.createProduct(req.body);
-    success(res, 201, 'Produk berhasil dibuat', created);
+    const numericStock = Number(req.body.stock ?? 0);
+
+    if (!Number.isInteger(numericStock) || numericStock < 0) {
+      return fail(
+        res,
+        400,
+        'Validasi gagal',
+        'stock harus berupa angka bulat >= 0'
+      );
+    }
+
+    const productData = {
+      name: name.trim(),
+      price: numericPrice,
+      stock: numericStock,
+      image: getImagePath(req) ?? null,
+    };
+
+    const created = await productModel.createProduct(productData);
+
+    return success(res, 201, 'Produk berhasil dibuat', created);
   } catch (error) {
+    // Jika penyimpanan database gagal, hapus foto yang baru diunggah.
+    if (req.file) {
+      removeImage(getImagePath(req));
+    }
+
     console.error('[createProduct]', error);
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error', error.message);
   }
 };
 
 /* =========================================================
- *  PUT /api/products/:id — update produk
+ * PUT /api/products/:id
  * ========================================================= */
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validasi kalau price dikirim
-    if (
-      req.body.price !== undefined &&
-      (isNaN(req.body.price) || req.body.price < 0)
-    ) {
-      return fail(res, 400, 'Validasi gagal', 'price harus angka >= 0');
+    const existing = await productModel.findProductById(id);
+
+    if (!existing) {
+      return fail(res, 404, 'Produk tidak ditemukan');
     }
 
-    const updated = await productModel.updateProduct(id, req.body);
-    if (!updated) return fail(res, 404, 'Produk tidak ditemukan');
+    if (
+      req.body.name !== undefined &&
+      (!req.body.name || req.body.name.trim() === '')
+    ) {
+      return fail(
+        res,
+        400,
+        'Validasi gagal',
+        'name tidak boleh kosong'
+      );
+    }
 
-    success(res, 200, 'Produk berhasil diupdate', updated);
+    const updateData = { ...req.body };
+
+    if (updateData.name !== undefined) {
+      updateData.name = updateData.name.trim();
+    }
+
+    if (updateData.price !== undefined) {
+      const numericPrice = Number(updateData.price);
+
+      if (
+        updateData.price === '' ||
+        !Number.isFinite(numericPrice) ||
+        numericPrice < 0
+      ) {
+        return fail(
+          res,
+          400,
+          'Validasi gagal',
+          'price harus angka >= 0'
+        );
+      }
+
+      updateData.price = numericPrice;
+    }
+
+    if (updateData.stock !== undefined) {
+      const numericStock = Number(updateData.stock);
+
+      if (!Number.isInteger(numericStock) || numericStock < 0) {
+        return fail(
+          res,
+          400,
+          'Validasi gagal',
+          'stock harus angka bulat >= 0'
+        );
+      }
+
+      updateData.stock = numericStock;
+    }
+
+    // Jika ada foto baru, gunakan path foto baru.
+    // Jika tidak ada, model tidak menerima perubahan kolom image.
+    const newImage = getImagePath(req);
+
+    if (newImage) {
+      updateData.image = newImage;
+    }
+
+    const updated = await productModel.updateProduct(id, updateData);
+
+    // Hapus foto lama hanya setelah update database berhasil.
+    if (newImage && existing.image) {
+      removeImage(existing.image);
+    }
+
+    return success(res, 200, 'Produk berhasil diupdate', updated);
   } catch (error) {
+    // Jika update gagal, hapus foto baru agar tidak menjadi file yatim.
+    if (req.file) {
+      removeImage(getImagePath(req));
+    }
+
     console.error('[updateProduct]', error);
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error', error.message);
   }
 };
 
 /* =========================================================
- *  DELETE /api/products/:id — hapus produk
+ * DELETE /api/products/:id
  * ========================================================= */
 const deleteProduct = async (req, res) => {
   try {
-    const deleted = await productModel.deleteProduct(req.params.id);
-    if (!deleted) return fail(res, 404, 'Produk tidak ditemukan');
+    const existing = await productModel.findProductById(req.params.id);
 
-    success(res, 200, 'Produk berhasil dihapus');
+    if (!existing) {
+      return fail(res, 404, 'Produk tidak ditemukan');
+    }
+
+    const deleted = await productModel.deleteProduct(req.params.id);
+
+    if (!deleted) {
+      return fail(res, 404, 'Produk tidak ditemukan');
+    }
+
+    // Hapus foto setelah produk berhasil dihapus dari database.
+    if (existing.image) {
+      removeImage(existing.image);
+    }
+
+    return success(res, 200, 'Produk berhasil dihapus');
   } catch (error) {
     console.error('[deleteProduct]', error);
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error', error.message);
   }
 };
 
+/* =========================================================
+ * POST /api/products/bulk
+ * ========================================================= */
 const bulkCreateProducts = async (req, res) => {
   try {
     const { products } = req.body;
@@ -144,7 +305,7 @@ const bulkCreateProducts = async (req, res) => {
 
     const created = await productModel.bulkCreateProducts(products);
 
-    success(
+    return success(
       res,
       201,
       `${created.length} produk berhasil dibuat`,
@@ -152,7 +313,7 @@ const bulkCreateProducts = async (req, res) => {
     );
   } catch (error) {
     console.error('[bulkCreateProducts]', error);
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error', error.message);
   }
 };
 
@@ -162,5 +323,5 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
-  bulkCreateProducts
+  bulkCreateProducts,
 };
