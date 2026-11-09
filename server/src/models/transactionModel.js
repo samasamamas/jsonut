@@ -1,5 +1,5 @@
 
-const db = require('../config/database');
+const { db } = require('../config/database');
 
 // GET semua pesanan
 const findAllTransactions = () => {
@@ -91,7 +91,9 @@ const updateTransaction = (id, data) => {
     }
 
     if (fields.length === 0) {
-      return findTransactionById(id).then(resolve).catch(reject);
+      return findTransactionById(id)
+        .then(resolve)
+        .catch(reject);
     }
 
     values.push(id);
@@ -108,7 +110,9 @@ const updateTransaction = (id, data) => {
             .catch(reject);
         }
 
-        findTransactionById(id).then(resolve).catch(reject);
+        findTransactionById(id)
+          .then(resolve)
+          .catch(reject);
       }
     );
   });

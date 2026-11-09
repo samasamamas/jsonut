@@ -1,3 +1,4 @@
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -19,7 +20,9 @@ const storage = multer.diskStorage({
 
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
+    const uniqueName = `${Date.now()}-${crypto.randomUUID()}${ext}`;
+
+    cb(null, uniqueName);
   },
 });
 
@@ -30,7 +33,11 @@ const fileFilter = (req, file, cb) => {
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Format foto harus JPG, PNG, atau WEBP'));
+    const error = new Error('Format foto harus JPG, PNG, atau WEBP');
+    error.status = 400;
+    error.isUploadError = true;
+
+    cb(error);
   }
 };
 
@@ -69,26 +76,33 @@ router.put(
 // DELETE produk
 router.delete('/:id', productController.deleteProduct);
 
-// Penanganan error Multer
+// Penanganan error upload
 router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
+    let message = error.message;
+
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      message = 'Ukuran foto maksimal 5 MB';
+    } else if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      message = 'Field upload foto tidak sesuai.';
+    }
+
     return res.status(400).json({
       success: false,
-      message:
-        error.code === 'LIMIT_FILE_SIZE'
-          ? 'Ukuran foto maksimal 5 MB'
-          : error.message,
+      message,
     });
   }
 
-  if (error) {
+  // Error validasi format foto
+  if (error.isUploadError) {
     return res.status(400).json({
       success: false,
       message: error.message,
     });
   }
 
-  next();
+  // Error lainnya diteruskan ke error handler server.js
+  next(error);
 });
 
 module.exports = router;

@@ -1,5 +1,9 @@
 
-const { dbRun, dbGet, dbAll } = require('../middlewares_helpers/sqlite3_helpers');
+const {
+  dbRun,
+  dbGet,
+  dbAll,
+} = require('../middlewares_helpers/sqlite3_helpers');
 
 /* =============== READ (all) =============== */
 const findAllProducts = async () => {
@@ -30,17 +34,13 @@ const createProduct = async (body) => {
     body.image ?? null,
   ];
 
-  const { lastID } = await dbRun(query, values);
+  const result = await dbRun(query, values);
 
-  return await findProductById(lastID);
+  return await findProductById(result.lastID);
 };
 
 /* =============== UPDATE =============== */
 const updateProduct = async (id, body) => {
-  const existing = await findProductById(id);
-
-  if (!existing) return null;
-
   const fields = [];
   const values = [];
 
@@ -65,7 +65,7 @@ const updateProduct = async (id, body) => {
   }
 
   if (fields.length === 0) {
-    return existing;
+    return null;
   }
 
   fields.push('updated_at = CURRENT_TIMESTAMP');
@@ -77,19 +77,59 @@ const updateProduct = async (id, body) => {
     WHERE id = ?
   `;
 
-  await dbRun(query, values);
+  const result = await dbRun(query, values);
+
+  if (result.changes === 0) {
+    return null;
+  }
 
   return await findProductById(id);
 };
 
 /* =============== DELETE =============== */
 const deleteProduct = async (id) => {
-  const { changes } = await dbRun(
-    'DELETE FROM products WHERE id = ?',
+  // Periksa apakah produk masih digunakan dalam transaksi
+  const usage = await dbGet(
+    `
+      SELECT COUNT(*) AS total
+      FROM transaction_details
+      WHERE product_id = ?
+    `,
     [id]
   );
 
-  return changes > 0;
+  if (usage && usage.total > 0) {
+    const error = new Error(
+      'Produk tidak dapat dihapus karena masih digunakan dalam riwayat transaksi.'
+    );
+
+    error.code = 'PRODUCT_IN_USE';
+    throw error;
+  }
+
+  try {
+    const result = await dbRun(
+      'DELETE FROM products WHERE id = ?',
+      [id]
+    );
+
+    return result.changes > 0;
+  } catch (error) {
+    // Perlindungan tambahan jika terjadi konflik foreign key
+    if (
+      error.code === 'SQLITE_CONSTRAINT' ||
+      error.message?.includes('FOREIGN KEY constraint failed')
+    ) {
+      const conflictError = new Error(
+        'Produk tidak dapat dihapus karena masih memiliki relasi dengan data lain.'
+      );
+
+      conflictError.code = 'PRODUCT_IN_USE';
+      throw conflictError;
+    }
+
+    throw error;
+  }
 };
 
 /* =============== BULK CREATE =============== */
@@ -111,16 +151,27 @@ const bulkCreateProducts = async (products) => {
         ]
       );
 
-      createdProducts.push(
-        await findProductById(result.lastID)
-      );
+      const createdProduct = await findProductById(result.lastID);
+
+      if (!createdProduct) {
+        throw new Error(
+          'Gagal mengambil data produk yang baru dibuat.'
+        );
+      }
+
+      createdProducts.push(createdProduct);
     }
 
     await dbRun('COMMIT');
 
     return createdProducts;
   } catch (error) {
-    await dbRun('ROLLBACK');
+    try {
+      await dbRun('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('Gagal melakukan rollback:', rollbackError);
+    }
+
     throw error;
   }
 };

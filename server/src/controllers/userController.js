@@ -1,31 +1,60 @@
+
 const bcrypt = require('bcrypt');
 const userModel = require('../models/userModel');
 
 /* =========================================================
- * Helper: standard response
+ * HELPER: Standard response
  * ========================================================= */
+
 const success = (res, code, message, data = null) =>
-  res.status(code).json({ success: true, message, data });
+  res.status(code).json({
+    success: true,
+    message,
+    data,
+  });
 
 const fail = (res, code, message, error = null) =>
-  res.status(code).json({ success: false, message, error });
+  res.status(code).json({
+    success: false,
+    message,
+    error,
+  });
+
+/* =========================================================
+ * HELPER: Validasi email
+ * ========================================================= */
+
+const isValidEmail = (email) => {
+  return (
+    typeof email === 'string' &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  );
+};
 
 /* =========================================================
  * GET /api/users — semua pengguna
  * ========================================================= */
+
 const getAllUsers = async (req, res) => {
   try {
     const users = await userModel.findAllUsers();
-    success(res, 200, 'Berhasil mengambil semua pengguna', users);
+
+    return success(
+      res,
+      200,
+      'Berhasil mengambil semua pengguna',
+      users
+    );
   } catch (error) {
     console.error('[getAllUsers]', error);
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error');
   }
 };
 
 /* =========================================================
  * GET /api/users/:id — satu pengguna
  * ========================================================= */
+
 const getUserById = async (req, res) => {
   try {
     const user = await userModel.findUserById(req.params.id);
@@ -34,61 +63,91 @@ const getUserById = async (req, res) => {
       return fail(res, 404, 'Pengguna tidak ditemukan');
     }
 
-    success(res, 200, 'Berhasil mengambil pengguna', user);
+    return success(
+      res,
+      200,
+      'Berhasil mengambil pengguna',
+      user
+    );
   } catch (error) {
     console.error('[getUserById]', error);
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error');
   }
 };
 
 /* =========================================================
  * POST /api/users — buat pengguna
  * ========================================================= */
+
 const createUser = async (req, res) => {
   try {
     const { full_name, email, password } = req.body;
 
-    if (typeof full_name !== 'string' || !full_name.trim()) {
-      return fail(res, 400, 'Validasi gagal', 'full_name wajib diisi');
-    }
-
-    if (typeof email !== 'string' || !email.trim()) {
-      return fail(res, 400, 'Validasi gagal', 'email wajib diisi');
-    }
-
-    if (typeof password !== 'string' || password.length < 8) {
+    if (
+      typeof full_name !== 'string' ||
+      !full_name.trim()
+    ) {
       return fail(
         res,
         400,
         'Validasi gagal',
-        'password wajib minimal 8 karakter'
+        'Nama lengkap wajib diisi'
       );
     }
 
-    // Role tidak diambil dari request agar pengguna biasa
-    // tidak dapat membuat akun admin dengan mengubah payload.
+    if (!isValidEmail(email)) {
+      return fail(
+        res,
+        400,
+        'Validasi gagal',
+        'Format email tidak valid'
+      );
+    }
+
+    if (
+      typeof password !== 'string' ||
+      password.length < 8
+    ) {
+      return fail(
+        res,
+        400,
+        'Validasi gagal',
+        'Password wajib minimal 8 karakter'
+      );
+    }
+
+    // Role selalu pelanggan untuk registrasi umum.
+    // Password akan di-hash di userModel.js.
     const created = await userModel.createUser({
       full_name: full_name.trim(),
-      email: email.trim(),
-      password: password,
+      email: email.trim().toLowerCase(),
+      password,
       role: 'pelanggan',
     });
 
-    success(res, 201, 'Pengguna berhasil dibuat', created);
+    return success(
+      res,
+      201,
+      'Pengguna berhasil dibuat',
+      created
+    );
   } catch (error) {
     console.error('[createUser]', error);
 
-    if (error.message?.includes('UNIQUE constraint failed')) {
+    if (
+      error.message?.includes('UNIQUE constraint failed')
+    ) {
       return fail(res, 409, 'Email sudah terdaftar');
     }
 
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error');
   }
 };
 
 /* =========================================================
  * PUT /api/users/:id — update pengguna
  * ========================================================= */
+
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -96,43 +155,79 @@ const updateUser = async (req, res) => {
 
     if (
       full_name !== undefined &&
-      (typeof full_name !== 'string' || !full_name.trim())
+      (
+        typeof full_name !== 'string' ||
+        !full_name.trim()
+      )
     ) {
-      return fail(res, 400, 'Validasi gagal', 'full_name tidak valid');
+      return fail(
+        res,
+        400,
+        'Validasi gagal',
+        'Nama lengkap tidak valid'
+      );
     }
 
     if (
       email !== undefined &&
-      (typeof email !== 'string' || !email.trim())
+      !isValidEmail(email)
     ) {
-      return fail(res, 400, 'Validasi gagal', 'email tidak valid');
+      return fail(
+        res,
+        400,
+        'Validasi gagal',
+        'Format email tidak valid'
+      );
     }
 
-    // Jangan menerima perubahan role dari endpoint umum ini.
+    if (
+      full_name === undefined &&
+      email === undefined
+    ) {
+      return fail(
+        res,
+        400,
+        'Tidak ada data yang diperbarui'
+      );
+    }
+
+    // Role tidak dapat diubah melalui endpoint ini.
     const updated = await userModel.updateUser(id, {
-      full_name: full_name?.trim(),
-      email: email?.trim(),
+      ...(full_name !== undefined && {
+        full_name: full_name.trim(),
+      }),
+      ...(email !== undefined && {
+        email: email.trim().toLowerCase(),
+      }),
     });
 
     if (!updated) {
       return fail(res, 404, 'Pengguna tidak ditemukan');
     }
 
-    success(res, 200, 'Pengguna berhasil diperbarui', updated);
+    return success(
+      res,
+      200,
+      'Pengguna berhasil diperbarui',
+      updated
+    );
   } catch (error) {
     console.error('[updateUser]', error);
 
-    if (error.message?.includes('UNIQUE constraint failed')) {
+    if (
+      error.message?.includes('UNIQUE constraint failed')
+    ) {
       return fail(res, 409, 'Email sudah terdaftar');
     }
 
-    fail(res, 500, 'Server Error', error.message);
+    return fail(res, 500, 'Server Error');
   }
 };
 
 /* =========================================================
  * DELETE /api/users/:id — hapus pengguna
  * ========================================================= */
+
 const deleteUser = async (req, res) => {
   try {
     const deleted = await userModel.deleteUser(req.params.id);
@@ -141,29 +236,76 @@ const deleteUser = async (req, res) => {
       return fail(res, 404, 'Pengguna tidak ditemukan');
     }
 
-    success(res, 200, 'Pengguna berhasil dihapus');
+    return success(
+      res,
+      200,
+      'Pengguna berhasil dihapus'
+    );
   } catch (error) {
     console.error('[deleteUser]', error);
-    fail(res, 500, 'Server Error', error.message);
+
+    if (
+      error.message?.includes('FOREIGN KEY constraint failed')
+    ) {
+      return fail(
+        res,
+        409,
+        'Pengguna masih memiliki transaksi terkait'
+      );
+    }
+
+    return fail(res, 500, 'Server Error');
   }
 };
+
+/* =========================================================
+ * POST /api/users/login — login admin
+ * ========================================================= */
 
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return fail(res, 400, 'Email dan password wajib diisi');
+    if (
+      typeof email !== 'string' ||
+      !email.trim() ||
+      typeof password !== 'string' ||
+      !password
+    ) {
+      return fail(
+        res,
+        400,
+        'Email dan password wajib diisi'
+      );
     }
 
-    const user = await userModel.findUserByEmail(email.trim());
+    if (!isValidEmail(email)) {
+      return fail(res, 400, 'Format email tidak valid');
+    }
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return fail(res, 401, 'Email atau password salah');
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await userModel.findUserByEmail(
+      normalizedEmail
+    );
+
+    if (
+      !user ||
+      !(await bcrypt.compare(password, user.password))
+    ) {
+      return fail(
+        res,
+        401,
+        'Email atau password salah'
+      );
     }
 
     if (user.role !== 'admin') {
-      return fail(res, 403, 'Akun tidak memiliki akses admin');
+      return fail(
+        res,
+        403,
+        'Akun tidak memiliki akses admin'
+      );
     }
 
     return success(res, 200, 'Login berhasil', {
@@ -177,6 +319,10 @@ const login = async (req, res) => {
     return fail(res, 500, 'Server Error');
   }
 };
+
+/* =========================================================
+ * EXPORT
+ * ========================================================= */
 
 module.exports = {
   getAllUsers,

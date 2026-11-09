@@ -20,42 +20,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 /* ==========================================
- * Inisialisasi database dan migrasi kolom
- * ========================================== */
-const initializeDatabase = () =>
-  new Promise((resolve, reject) => {
-    db.exec(initSQL, async (err) => {
-      if (err) {
-        return reject(err);
-      }
-
-      try {
-        // Periksa apakah kolom image sudah tersedia.
-        const columns = await dbAll('PRAGMA table_info(products)');
-
-        const imageColumnExists = columns.some(
-          (column) => column.name === 'image'
-        );
-
-        // Tambahkan kolom image jika database lama belum memilikinya.
-        if (!imageColumnExists) {
-          await dbRun(
-            'ALTER TABLE products ADD COLUMN image TEXT DEFAULT NULL'
-          );
-
-          console.log('✅ Kolom image berhasil ditambahkan');
-        }
-
-        resolve();
-      } catch (migrationError) {
-        reject(migrationError);
-      }
-    });
-  });
-
-/* ==========================================
  * Helper Promise untuk SQLite
  * ========================================== */
+
 const dbAll = (query, params = []) => {
   return new Promise((resolve, reject) => {
     db.all(query, params, (err, rows) => {
@@ -87,6 +54,41 @@ const dbRun = (query, params = []) => {
     });
   });
 };
+
+/* ==========================================
+ * Inisialisasi database dan migrasi kolom
+ * ========================================== */
+
+const initializeDatabase = () =>
+  new Promise((resolve, reject) => {
+    db.exec(initSQL, async (err) => {
+      if (err) {
+        return reject(err);
+      }
+
+      try {
+
+        const columns = await dbAll('PRAGMA table_info(products)');
+
+        const imageColumnExists = columns.some(
+          (column) => column.name === 'image'
+        );
+
+        // Tambahkan kolom image jika database lama belum memilikinya.
+        if (!imageColumnExists) {
+          await dbRun(
+            'ALTER TABLE products ADD COLUMN image TEXT DEFAULT NULL'
+          );
+
+          console.log('✅ Kolom image berhasil ditambahkan');
+        }
+
+        resolve();
+      } catch (migrationError) {
+        reject(migrationError);
+      }
+    });
+  });
 
 module.exports = {
   db,

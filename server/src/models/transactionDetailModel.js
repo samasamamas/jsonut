@@ -1,152 +1,212 @@
 
-const db = require('../config/database');
+const { db } = require('../config/database');
 
-// GET semua detail pesanan
-const findAllTransactionDetails = () => {
+/* ==========================================
+ * HELPER: Jalankan query
+ * ========================================== */
+
+const runQuery = (query, params = []) => {
   return new Promise((resolve, reject) => {
-    db.all(
-      `SELECT 
-        td.*,
-        p.name AS product_name
-       FROM transaction_details td
-       LEFT JOIN products p ON td.product_id = p.id
-       ORDER BY td.id DESC`,
-      [],
-      (err, rows) => {
-        if (err) return reject(err);
-        resolve(rows);
-      }
-    );
+    db.run(query, params, function (err) {
+      if (err) return reject(err);
+
+      resolve({
+        lastID: this.lastID,
+        changes: this.changes,
+      });
+    });
   });
 };
 
-// GET detail berdasarkan ID
-const findTransactionDetailById = (id) => {
+const getQuery = (query, params = []) => {
   return new Promise((resolve, reject) => {
-    db.get(
-      `SELECT 
-        td.*,
-        p.name AS product_name
-       FROM transaction_details td
-       LEFT JOIN products p ON td.product_id = p.id
-       WHERE td.id = ?`,
-      [id],
-      (err, row) => {
-        if (err) return reject(err);
-        resolve(row || null);
-      }
-    );
+    db.get(query, params, (err, row) => {
+      if (err) return reject(err);
+      resolve(row || null);
+    });
   });
 };
 
-// GET semua detail berdasarkan ID pesanan
-const findDetailsByTransactionId = (transactionId) => {
+const allQuery = (query, params = []) => {
   return new Promise((resolve, reject) => {
-    db.all(
-      `SELECT 
-        td.*,
-        p.name AS product_name
-       FROM transaction_details td
-       LEFT JOIN products p ON td.product_id = p.id
-       WHERE td.transaction_id = ?
-       ORDER BY td.id ASC`,
-      [transactionId],
-      (err, rows) => {
-        if (err) return reject(err);
-        resolve(rows);
-      }
-    );
+    db.all(query, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
   });
 };
 
-// CREATE detail pesanan
-const createTransactionDetail = (data) => {
-  return new Promise((resolve, reject) => {
-    const {
+/* ==========================================
+ * HELPER: Sinkronisasi total transaksi
+ * ========================================== */
+
+const updateTransactionTotal = async (transactionId) => {
+  await runQuery(
+    `UPDATE transactions
+     SET total_amount = (
+       SELECT COALESCE(SUM(subtotal), 0)
+       FROM transaction_details
+       WHERE transaction_id = ?
+     )
+     WHERE id = ?`,
+    [transactionId, transactionId]
+  );
+};
+
+/* ==========================================
+ * READ: Semua detail pesanan
+ * ========================================== */
+
+const findAllTransactionDetails = async () => {
+  return await allQuery(
+    `SELECT
+      td.*,
+      p.name AS product_name
+     FROM transaction_details td
+     LEFT JOIN products p ON td.product_id = p.id
+     ORDER BY td.id DESC`
+  );
+};
+
+/* ==========================================
+ * READ: Detail berdasarkan ID
+ * ========================================== */
+
+const findTransactionDetailById = async (id) => {
+  return await getQuery(
+    `SELECT
+      td.*,
+      p.name AS product_name
+     FROM transaction_details td
+     LEFT JOIN products p ON td.product_id = p.id
+     WHERE td.id = ?`,
+    [id]
+  );
+};
+
+/* ==========================================
+ * READ: Detail berdasarkan ID transaksi
+ * ========================================== */
+
+const findDetailsByTransactionId = async (transactionId) => {
+  return await allQuery(
+    `SELECT
+      td.*,
+      p.name AS product_name
+     FROM transaction_details td
+     LEFT JOIN products p ON td.product_id = p.id
+     WHERE td.transaction_id = ?
+     ORDER BY td.id ASC`,
+    [transactionId]
+  );
+};
+
+/* ==========================================
+ * CREATE: Tambah detail pesanan
+ * ========================================== */
+
+const createTransactionDetail = async (data) => {
+  const {
+    transaction_id,
+    product_id,
+    quantity,
+    price_at_time,
+    subtotal,
+  } = data;
+
+  const result = await runQuery(
+    `INSERT INTO transaction_details
+      (transaction_id, product_id, quantity, price_at_time, subtotal)
+     VALUES (?, ?, ?, ?, ?)`,
+    [
       transaction_id,
       product_id,
       quantity,
       price_at_time,
       subtotal,
-    } = data;
+    ]
+  );
 
-    db.run(
-      `INSERT INTO transaction_details
-        (transaction_id, product_id, quantity, price_at_time, subtotal)
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        transaction_id,
-        product_id,
-        quantity,
-        price_at_time,
-        subtotal,
-      ],
-      function (err) {
-        if (err) return reject(err);
+  // Perbarui total transaksi setelah detail berhasil ditambahkan.
+  await updateTransactionTotal(transaction_id);
 
-        findTransactionDetailById(this.lastID)
-          .then(resolve)
-          .catch(reject);
-      }
-    );
-  });
+  return await findTransactionDetailById(result.lastID);
 };
 
-// UPDATE detail pesanan
-const updateTransactionDetail = (id, data) => {
-  return new Promise((resolve, reject) => {
-    const fields = [];
-    const values = [];
+/* ==========================================
+ * UPDATE: Perbarui detail pesanan
+ * ========================================== */
 
-    if (data.quantity !== undefined) {
-      fields.push('quantity = ?');
-      values.push(data.quantity);
-    }
+const updateTransactionDetail = async (id, data) => {
+  const existing = await getQuery(
+    `SELECT * FROM transaction_details WHERE id = ?`,
+    [id]
+  );
 
-    if (data.price_at_time !== undefined) {
-      fields.push('price_at_time = ?');
-      values.push(data.price_at_time);
-    }
+  if (!existing) {
+    return null;
+  }
 
-    if (fields.length === 0) {
-      return findTransactionDetailById(id)
-        .then(resolve)
-        .catch(reject);
-    }
+  const fields = [];
+  const values = [];
 
-    // Hitung ulang subtotal berdasarkan nilai baru
-    fields.push('subtotal = quantity * price_at_time');
+  if (data.quantity !== undefined) {
+    fields.push('quantity = ?');
+    values.push(data.quantity);
+  }
 
-    values.push(id);
+  if (data.price_at_time !== undefined) {
+    fields.push('price_at_time = ?');
+    values.push(data.price_at_time);
+  }
 
-    db.run(
-      `UPDATE transaction_details
-       SET ${fields.join(', ')}
-       WHERE id = ?`,
-      values,
-      function (err) {
-        if (err) return reject(err);
+  if (fields.length === 0) {
+    return await findTransactionDetailById(id);
+  }
 
-        findTransactionDetailById(id)
-          .then(resolve)
-          .catch(reject);
-      }
-    );
-  });
+  // Hitung ulang subtotal berdasarkan jumlah dan harga terbaru.
+  fields.push('subtotal = quantity * price_at_time');
+
+  values.push(id);
+
+  await runQuery(
+    `UPDATE transaction_details
+     SET ${fields.join(', ')}
+     WHERE id = ?`,
+    values
+  );
+
+  // Perbarui total transaksi setelah detail berhasil diubah.
+  await updateTransactionTotal(existing.transaction_id);
+
+  return await findTransactionDetailById(id);
 };
 
-// DELETE satu detail produk
-const deleteTransactionDetail = (id) => {
-  return new Promise((resolve, reject) => {
-    db.run(
-      `DELETE FROM transaction_details WHERE id = ?`,
-      [id],
-      function (err) {
-        if (err) return reject(err);
-        resolve(this.changes > 0);
-      }
-    );
-  });
+/* ==========================================
+ * DELETE: Hapus detail pesanan
+ * ========================================== */
+
+const deleteTransactionDetail = async (id) => {
+  const existing = await getQuery(
+    `SELECT transaction_id
+     FROM transaction_details
+     WHERE id = ?`,
+    [id]
+  );
+
+  if (!existing) {
+    return false;
+  }
+
+  await runQuery(
+    `DELETE FROM transaction_details WHERE id = ?`,
+    [id]
+  );
+
+  // Perbarui total transaksi setelah detail dihapus.
+  await updateTransactionTotal(existing.transaction_id);
+
+  return true;
 };
 
 module.exports = {

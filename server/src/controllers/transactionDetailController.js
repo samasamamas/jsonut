@@ -1,6 +1,10 @@
 
 const transactionDetailModel = require('../models/transactionDetailModel');
 
+/* ==========================================
+ * HELPER: Standard response
+ * ========================================== */
+
 const success = (res, code, message, data = null) =>
   res.status(code).json({
     success: true,
@@ -15,10 +19,29 @@ const fail = (res, code, message, error = null) =>
     error,
   });
 
-// GET semua detail pesanan
+/* ==========================================
+ * HELPER: Validasi angka
+ * ========================================== */
+
+const isPositiveInteger = (value) =>
+  Number.isInteger(Number(value)) &&
+  Number(value) > 0;
+
+const isValidPrice = (value) =>
+  value !== '' &&
+  value !== null &&
+  value !== undefined &&
+  Number.isFinite(Number(value)) &&
+  Number(value) >= 0;
+
+/* ==========================================
+ * GET: Semua detail pesanan
+ * ========================================== */
+
 const getAllTransactionDetails = async (req, res) => {
   try {
-    const details = await transactionDetailModel.findAllTransactionDetails();
+    const details =
+      await transactionDetailModel.findAllTransactionDetails();
 
     return success(
       res,
@@ -32,30 +55,52 @@ const getAllTransactionDetails = async (req, res) => {
   }
 };
 
-// GET detail berdasarkan ID
+/* ==========================================
+ * GET: Detail berdasarkan ID
+ * ========================================== */
+
 const getTransactionDetailById = async (req, res) => {
   try {
-    const detail = await transactionDetailModel.findTransactionDetailById(
-      req.params.id
-    );
+    const detail =
+      await transactionDetailModel.findTransactionDetailById(
+        req.params.id
+      );
 
     if (!detail) {
       return fail(res, 404, 'Detail pesanan tidak ditemukan');
     }
 
-    return success(res, 200, 'Berhasil mengambil detail pesanan', detail);
+    return success(
+      res,
+      200,
+      'Berhasil mengambil detail pesanan',
+      detail
+    );
   } catch (error) {
     console.error('[getTransactionDetailById]', error);
     return fail(res, 500, 'Server Error');
   }
 };
 
-// GET detail berdasarkan ID pesanan
+/* ==========================================
+ * GET: Detail berdasarkan ID transaksi
+ * ========================================== */
+
 const getDetailsByTransactionId = async (req, res) => {
   try {
-    const details = await transactionDetailModel.findDetailsByTransactionId(
-      req.params.transactionId
-    );
+    const { transactionId } = req.params;
+
+    if (
+      typeof transactionId !== 'string' ||
+      !transactionId.trim()
+    ) {
+      return fail(res, 400, 'ID pesanan tidak valid');
+    }
+
+    const details =
+      await transactionDetailModel.findDetailsByTransactionId(
+        transactionId.trim()
+      );
 
     return success(
       res,
@@ -69,7 +114,10 @@ const getDetailsByTransactionId = async (req, res) => {
   }
 };
 
-// POST menambahkan produk ke pesanan
+/* ==========================================
+ * POST: Menambahkan produk ke pesanan
+ * ========================================== */
+
 const createTransactionDetail = async (req, res) => {
   try {
     const {
@@ -86,44 +134,68 @@ const createTransactionDetail = async (req, res) => {
       return fail(res, 400, 'ID pesanan wajib diisi');
     }
 
-    if (!Number.isInteger(product_id) || product_id <= 0) {
+    if (!isPositiveInteger(product_id)) {
       return fail(res, 400, 'ID produk tidak valid');
     }
 
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      return fail(res, 400, 'Jumlah produk harus lebih dari 0');
+    if (!isPositiveInteger(quantity)) {
+      return fail(
+        res,
+        400,
+        'Jumlah produk harus berupa bilangan bulat lebih dari 0'
+      );
     }
 
-    if (
-      !Number.isFinite(price_at_time) ||
-      price_at_time < 0
-    ) {
+    if (!isValidPrice(price_at_time)) {
       return fail(res, 400, 'Harga produk tidak valid');
     }
 
-    const subtotal = quantity * price_at_time;
+    const normalizedQuantity = Number(quantity);
+    const normalizedPrice = Number(price_at_time);
+    const subtotal = normalizedQuantity * normalizedPrice;
 
-    const detail = await transactionDetailModel.createTransactionDetail({
-      transaction_id: transaction_id.trim(),
-      product_id,
-      quantity,
-      price_at_time,
-      subtotal,
-    });
+    if (!Number.isFinite(subtotal)) {
+      return fail(res, 400, 'Subtotal tidak valid');
+    }
 
-    return success(res, 201, 'Detail pesanan berhasil ditambahkan', detail);
+    const detail =
+      await transactionDetailModel.createTransactionDetail({
+        transaction_id: transaction_id.trim(),
+        product_id: Number(product_id),
+        quantity: normalizedQuantity,
+        price_at_time: normalizedPrice,
+        subtotal,
+      });
+
+    return success(
+      res,
+      201,
+      'Detail pesanan berhasil ditambahkan',
+      detail
+    );
   } catch (error) {
     console.error('[createTransactionDetail]', error);
 
-    if (error.message?.includes('FOREIGN KEY constraint failed')) {
-      return fail(res, 400, 'Pesanan atau produk tidak ditemukan');
+    if (
+      error.message?.includes(
+        'FOREIGN KEY constraint failed'
+      )
+    ) {
+      return fail(
+        res,
+        400,
+        'Pesanan atau produk tidak ditemukan'
+      );
     }
 
     return fail(res, 500, 'Server Error');
   }
 };
 
-// PUT memperbarui detail produk
+/* ==========================================
+ * PUT: Memperbarui detail produk
+ * ========================================== */
+
 const updateTransactionDetail = async (req, res) => {
   try {
     const { quantity, price_at_time } = req.body;
@@ -132,56 +204,92 @@ const updateTransactionDetail = async (req, res) => {
       quantity === undefined &&
       price_at_time === undefined
     ) {
-      return fail(res, 400, 'Jumlah atau harga wajib diisi');
+      return fail(
+        res,
+        400,
+        'Jumlah atau harga wajib diisi'
+      );
     }
 
     if (
       quantity !== undefined &&
-      (!Number.isInteger(quantity) || quantity <= 0)
+      !isPositiveInteger(quantity)
     ) {
-      return fail(res, 400, 'Jumlah produk harus lebih dari 0');
+      return fail(
+        res,
+        400,
+        'Jumlah produk harus berupa bilangan bulat lebih dari 0'
+      );
     }
 
     if (
       price_at_time !== undefined &&
-      (!Number.isFinite(price_at_time) || price_at_time < 0)
+      !isValidPrice(price_at_time)
     ) {
       return fail(res, 400, 'Harga produk tidak valid');
     }
 
-    const detail = await transactionDetailModel.updateTransactionDetail(
-      req.params.id,
-      { quantity, price_at_time }
-    );
+    const updateData = {};
+
+    if (quantity !== undefined) {
+      updateData.quantity = Number(quantity);
+    }
+
+    if (price_at_time !== undefined) {
+      updateData.price_at_time = Number(price_at_time);
+    }
+
+    const detail =
+      await transactionDetailModel.updateTransactionDetail(
+        req.params.id,
+        updateData
+      );
 
     if (!detail) {
       return fail(res, 404, 'Detail pesanan tidak ditemukan');
     }
 
-    return success(res, 200, 'Detail pesanan berhasil diperbarui', detail);
+    return success(
+      res,
+      200,
+      'Detail pesanan berhasil diperbarui',
+      detail
+    );
   } catch (error) {
     console.error('[updateTransactionDetail]', error);
     return fail(res, 500, 'Server Error');
   }
 };
 
-// DELETE satu detail produk
+/* ==========================================
+ * DELETE: Menghapus produk dari pesanan
+ * ========================================== */
+
 const deleteTransactionDetail = async (req, res) => {
   try {
-    const deleted = await transactionDetailModel.deleteTransactionDetail(
-      req.params.id
-    );
+    const deleted =
+      await transactionDetailModel.deleteTransactionDetail(
+        req.params.id
+      );
 
     if (!deleted) {
       return fail(res, 404, 'Detail pesanan tidak ditemukan');
     }
 
-    return success(res, 200, 'Detail produk berhasil dihapus dari pesanan');
+    return success(
+      res,
+      200,
+      'Detail produk berhasil dihapus dari pesanan'
+    );
   } catch (error) {
     console.error('[deleteTransactionDetail]', error);
     return fail(res, 500, 'Server Error');
   }
 };
+
+/* ==========================================
+ * EXPORT
+ * ========================================== */
 
 module.exports = {
   getAllTransactionDetails,
