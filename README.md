@@ -1,28 +1,44 @@
+
 # JSONut
 
 **JSONut** merupakan sistem informasi manajemen toko donat yang dikembangkan untuk membantu proses pengelolaan produk, persediaan stok, dan transaksi penjualan.
 
 Sistem ini dirancang dengan konsep multi-platform yang terdiri dari Web Admin, Mobile App pelanggan, dan Desktop POS kasir. Ketiga platform direncanakan terintegrasi melalui backend dan basis data terpusat.
 
+## Kredensial Login Web Admin
+
+Gunakan akun demo berikut untuk mengakses Website Admin JSONut:
+
+| Keterangan | Kredensial |
+|---|---|
+| Email | `admin@jsonut.com` |
+| Password | `admin123` |
+
+Akun tersebut disediakan untuk keperluan demonstrasi dan pengujian aplikasi.
+
 ## Fitur Utama
 
 ### 1. Dashboard
+
 Menampilkan ringkasan informasi operasional toko, meliputi:
 - Total jenis produk donat.
 - Jumlah varian dengan stok yang perlu diperhatikan.
 - Total persediaan fisik donat.
 
 ### 2. Manajemen Produk
+
 - Menampilkan, menambahkan, mengubah, dan menghapus produk.
 - Mencari produk berdasarkan nama.
 - Mengelola harga, jumlah stok, dan foto produk.
 
 ### 3. Manajemen Stok
+
 - Menampilkan jumlah stok setiap produk.
 - Menampilkan status stok Habis, Menipis, dan Aman.
 - Menyesuaikan jumlah stok produk.
 
 ### 4. Manajemen Transaksi
+
 - Menampilkan daftar transaksi.
 - Mencari transaksi berdasarkan ID.
 - Memfilter transaksi berdasarkan tanggal.
@@ -130,9 +146,6 @@ http://localhost:3000
 ## Integrasi Sistem
 
 Web Admin berkomunikasi dengan backend melalui REST API. Backend bertugas memproses permintaan aplikasi dan mengelola data pada basis data SQLite.
-**Gunakan kredensial akun ini untuk mengakses Website Admin**
-email : admin@jsonut.com
-password : admin123
 
 Dengan konsep basis data terpusat, pengembangan platform lainnya dapat menggunakan backend yang sama sehingga informasi sistem dapat dikelola secara terintegrasi.
 
