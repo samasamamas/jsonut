@@ -130,6 +130,9 @@ http://localhost:3000
 ## Integrasi Sistem
 
 Web Admin berkomunikasi dengan backend melalui REST API. Backend bertugas memproses permintaan aplikasi dan mengelola data pada basis data SQLite.
+**Gunakan kredensial akun ini untuk mengakses Website Admin**
+email : admin@jsonut.com
+password : admin123
 
 Dengan konsep basis data terpusat, pengembangan platform lainnya dapat menggunakan backend yang sama sehingga informasi sistem dapat dikelola secara terintegrasi.
 

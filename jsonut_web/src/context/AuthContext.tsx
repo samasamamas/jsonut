@@ -13,7 +13,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(
-    () => localStorage.getItem('isLoggedIn') === 'true'
+    () => sessionStorage.getItem('isLoggedIn') === 'true'
   );
 
   // LOGIN
@@ -41,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Akun tidak memiliki akses admin.');
       }
 
-      // Menyimpan status login
-      localStorage.setItem('isLoggedIn', 'true');
+      // Menyimpan status login selama sesi tab
+      sessionStorage.setItem('isLoggedIn', 'true');
       setIsAuthenticated(true);
 
     } catch (error: any) {
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // LOGOUT
   const logout = () => {
-    localStorage.removeItem('isLoggedIn');
+    sessionStorage.removeItem('isLoggedIn');
     setIsAuthenticated(false);
   };
 
