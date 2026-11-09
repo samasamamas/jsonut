@@ -351,7 +351,7 @@ function AdminLayout() {
 
       <div className="main-content">
         <div className="content-header">
-          <h2>Modul {activeTab}</h2>
+          <h2>{activeTab}</h2>
 
           <div className="admin-profile-container">
             <span
